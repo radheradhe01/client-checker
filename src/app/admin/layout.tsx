@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import AdminLogoutButton from '@/components/AdminLogoutButton';
 // In a real app, we would check for Admin Team membership here.
 // For now, we'll assume the user is logged in (handled by middleware later) 
 // and just provide the layout structure.
@@ -26,16 +27,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                             </div>
                         </div>
                         <div className="flex items-center">
-                            <button
-                                onClick={async () => {
-                                    const { account } = await import('@/lib/appwrite/client');
-                                    await account.deleteSession('current');
-                                    window.location.href = '/login?role=admin';
-                                }}
-                                className="text-gray-500 hover:text-gray-700 text-sm font-medium"
-                            >
-                                Logout
-                            </button>
+                            <AdminLogoutButton />
                         </div>
                     </div>
                 </div>

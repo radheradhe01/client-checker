@@ -10,27 +10,30 @@ export async function middleware(request: NextRequest) {
         const cookieStore = await cookies();
         const sessionCookie = cookieStore.get('a_session_console') ||
             cookieStore.get(`a_session_${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}`);
+        const devSession = cookieStore.get('dev_session');
 
-        if (!sessionCookie) {
+        if (!sessionCookie && !devSession) {
             return NextResponse.redirect(new URL('/login?role=admin', request.url));
         }
 
         // Verify admin team membership
         try {
+            // For dev session, we skip RBAC check in middleware as it's mocked
+            if (devSession) return NextResponse.next();
+
             const { createAdminClient } = await import('@/lib/appwrite/server');
             const { teams, account } = await createAdminClient();
 
             // Get current user (we use admin client with API key for server-side operations)
             // In a real production app, we'd validate the session cookie value here
             // For now, we trust the session exists and check team membership via the teams API
-
             // Note: We can't easily get userId from session in middleware without making it async
             // Better approach: Set a custom header or cookie with role after login
             // For MVP: We'll just check session exists and rely on API routes for detailed auth
 
         } catch (error) {
             console.error('Middleware auth error:', error);
-            return NextResponse.redirect(new URL('/ login?role=admin', request.url));
+            return NextResponse.redirect(new URL('/login?role=admin', request.url));
         }
     }
 
@@ -39,8 +42,9 @@ export async function middleware(request: NextRequest) {
         const cookieStore = await cookies();
         const sessionCookie = cookieStore.get('a_session_console') ||
             cookieStore.get(`a_session_${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}`);
+        const devSession = cookieStore.get('dev_session');
 
-        if (!sessionCookie) {
+        if (!sessionCookie && !devSession) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
     }

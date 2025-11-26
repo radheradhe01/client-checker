@@ -45,8 +45,9 @@ export async function POST(req: NextRequest) {
         // so it creates a user in the project.
         const user = await account.create(ID.unique(), email, password, name);
 
-        // 2. Add to Employee Team - use email in the roles array
-        await teams.createMembership('employee', [email]);
+        // 2. Add to Employee Team
+        // Args: teamId, roles, email, userId, phone, url, name
+        await teams.createMembership('employee', [], email, user.$id);
 
         return NextResponse.json({ success: true, user });
 

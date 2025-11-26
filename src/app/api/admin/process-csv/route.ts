@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
 
         // 1. Fetch the uploaded file
         const fileData = await storage.getFileDownload(APPWRITE_BUCKET_ID, fileId);
-        const arrayBuffer = await fileData.arrayBuffer();
-        const fileContent = Buffer.from(arrayBuffer).toString('utf-8');
+        const buffer = Buffer.from(fileData);
+        const fileContent = buffer.toString('utf-8');
 
         // 2. Parse CSV
         const records = parse(fileContent, {
@@ -57,12 +57,38 @@ export async function POST(req: NextRequest) {
         const skippedDuplicates: string[] = [];
 
         // Fetch existing FRNs to check for duplicates
-        const existingLeads = await databases.listDocuments(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_LEADS_COLLECTION_ID,
-            [Query.limit(5000)] // Get all to check duplicates
-        );
-        const existingFRNs = new Set(existingLeads.documents.map((d: any) => d.frn));
+        // We need to fetch ALL existing FRNs to ensure no duplicates are added.
+        // We'll use pagination to fetch them in batches.
+        const existingFRNs = new Set<string>();
+        let cursor: string | null = null;
+        let hasMore = true;
+
+        while (hasMore) {
+            const queries = [
+                Query.limit(5000),
+                Query.select(['frn']) // Optimize: only fetch FRN field
+            ];
+
+            if (cursor) {
+                queries.push(Query.cursorAfter(cursor));
+            }
+
+            const batch = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_LEADS_COLLECTION_ID,
+                queries
+            );
+
+            batch.documents.forEach((d: any) => {
+                if (d.frn) existingFRNs.add(d.frn);
+            });
+
+            if (batch.documents.length < 5000) {
+                hasMore = false;
+            } else {
+                cursor = batch.documents[batch.documents.length - 1].$id;
+            }
+        }
 
         records.forEach((record, index) => {
             const rowNumber = index + 2; // +2 because 1-indexed and header row
@@ -105,36 +131,43 @@ export async function POST(req: NextRequest) {
             validRecords.push(record);
         });
 
-        // 4. Create documents for valid records
+        // 4. Create documents for valid records with batching
         const created: string[] = [];
         const failed: Array<{ frn: string; error: string }> = [];
 
-        for (const record of validRecords) {
-            try {
-                await databases.createDocument(
-                    APPWRITE_DATABASE_ID,
-                    APPWRITE_LEADS_COLLECTION_ID,
-                    'unique()',
-                    {
-                        frn: record.frn.trim(),
-                        company_name: record.company_name.trim(),
-                        contact_email: record.contact_email?.trim() || null,
-                        contact_phone: record.contact_phone?.trim() || null,
-                        service_type: record.service_type?.trim() || null,
-                        website: record.website?.trim() || null,
-                        assignedEmployeeId: null,
-                        pipelineStatus: 'Unassigned',
-                        history: [JSON.stringify({
-                            by: 'admin',
-                            action: ' csv_import',
-                            ts: new Date().toISOString()
-                        })]
-                    }
-                );
-                created.push(record.frn.trim());
-            } catch (error: any) {
-                failed.push({ frn: record.frn, error: error.message });
-            }
+        // Process in batches of 50 for faster uploads
+        const BATCH_SIZE = 100;
+
+        for (let i = 0; i < validRecords.length; i += BATCH_SIZE) {
+            const batch = validRecords.slice(i, i + BATCH_SIZE);
+
+            await Promise.all(batch.map(async (record) => {
+                try {
+                    await databases.createDocument(
+                        APPWRITE_DATABASE_ID,
+                        APPWRITE_LEADS_COLLECTION_ID,
+                        'unique()',
+                        {
+                            frn: record.frn.trim(),
+                            company_name: record.company_name.trim(),
+                            contact_email: record.contact_email?.trim() || null,
+                            contact_phone: record.contact_phone?.trim() || null,
+                            service_type: record.service_type?.trim() || null,
+                            website: record.website?.trim() || null,
+                            assignedEmployeeId: null,
+                            pipelineStatus: 'Unassigned',
+                            history: [JSON.stringify({
+                                by: 'admin',
+                                action: ' csv_import',
+                                ts: new Date().toISOString()
+                            })]
+                        }
+                    );
+                    created.push(record.frn.trim());
+                } catch (error: any) {
+                    failed.push({ frn: record.frn, error: error.message });
+                }
+            }));
         }
 
         // 5. Return summary

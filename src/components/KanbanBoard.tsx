@@ -38,11 +38,16 @@ export default function KanbanBoard() {
     useEffect(() => {
         const init = async () => {
             try {
-                const user = await account.get();
+                // Use our own API which handles both Appwrite sessions and Dev sessions
+                const res = await fetch('/api/auth/me');
+                if (!res.ok) throw new Error('Unauthorized');
+
+                const user = await res.json();
                 setUserId(user.$id);
                 fetchLeads(user.$id);
             } catch (error) {
                 console.error('Auth error', error);
+                window.location.href = '/login';
             }
         };
         init();

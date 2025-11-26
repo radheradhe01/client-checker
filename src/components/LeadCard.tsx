@@ -36,7 +36,11 @@ export default function LeadCard({ lead, onClaim, showClaimButton = false, claim
     return (
         <div className="bg-white shadow rounded-lg p-5 border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-3">
-                <h3 className="text-lg font-semibold text-gray-900">{lead.company_name}</h3>
+                <h3 className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors">
+                    <a href={`/leads/${lead.$id}`}>
+                        {lead.company_name}
+                    </a>
+                </h3>
                 {lead.pipelineStatus && (
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
                         {lead.pipelineStatus}
@@ -81,8 +85,8 @@ export default function LeadCard({ lead, onClaim, showClaimButton = false, claim
                     onClick={() => onClaim(lead.$id)}
                     disabled={claiming}
                     className={`mt-4 w-full py-2 px-4 rounded-md font-medium transition-colors ${claiming
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
                         }`}
                 >
                     {claiming ? 'Claiming...' : 'Claim Lead'}

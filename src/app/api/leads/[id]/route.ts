@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserFromRequest } from '@/lib/session';
+import { getUserFromRequest, createSessionClient } from '@/lib/session';
 import { createAdminClient } from '@/lib/appwrite/server';
 import { APPWRITE_DATABASE_ID, APPWRITE_LEADS_COLLECTION_ID } from '@/lib/appwrite/config';
 import { cookies } from 'next/headers';
+
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const { databases } = await createSessionClient();
+
+        const lead = await databases.getDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_LEADS_COLLECTION_ID,
+            id
+        );
+
+        return NextResponse.json(lead);
+
+    } catch (error: any) {
+        console.error('Get Lead Error:', error);
+        if (error.message?.includes('Unauthorized')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
 
 export async function PATCH(
     req: NextRequest,

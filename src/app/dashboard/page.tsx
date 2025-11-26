@@ -10,10 +10,14 @@ export default function DashboardPage() {
     useEffect(() => {
         const checkUser = async () => {
             try {
-                const u = await account.get();
+                // Use our own API which handles both Appwrite sessions and Dev sessions
+                const res = await fetch('/api/auth/me');
+                if (!res.ok) throw new Error('Unauthorized');
+
+                const u = await res.json();
                 setUser(u);
-            } catch (error) {
-                // Not logged in, redirect to login (Phase 1 skipped login UI, so we might just show message)
+            } catch (error: any) {
+                console.error('Session check failed:', error);
                 window.location.href = '/login';
             }
         };

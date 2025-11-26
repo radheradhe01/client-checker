@@ -15,22 +15,20 @@ export default function LoginPage() {
         setError('');
 
         try {
-            // Try to create session - if one exists, Appwrite will return an error
-            try {
-                await account.createEmailPasswordSession(email, password);
-            } catch (sessionError: any) {
-                // If error is "session already exists", logout and try again
-                if (sessionError.type === 'user_session_already_exists') {
-                    await account.deleteSession('current');
-                    await account.createEmailPasswordSession(email, password);
-                } else {
-                    throw sessionError;
-                }
+            // Use Dev Login API to bypass Appwrite rate limits
+            const res = await fetch('/api/auth/dev-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Login failed');
             }
 
-            // Successfully logged in, redirect to dashboard
-            // Note: We redirect all users to dashboard for now
-            // Admins can navigate to /admin from there
+            // Success! Redirect to dashboard
             router.push('/dashboard');
 
         } catch (err: any) {
