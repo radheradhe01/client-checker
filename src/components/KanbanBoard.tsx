@@ -53,48 +53,52 @@ export default function KanbanBoard() {
         init();
     }, []);
 
-    useEffect(() => {
-        if (!userId) return;
+    // Realtime subscriptions disabled - incompatible with dev_session
+    // TODO: Re-enable when all users have proper Appwrite sessions
+    // useEffect(() => {
+    //     if (!userId) return;
 
-        const unsubscribe = client.subscribe(
-            `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_LEADS_COLLECTION_ID}.documents`,
-            (response) => {
-                const event = response.events[0];
-                const payload = response.payload as Lead;
+    //     const unsubscribe = client.subscribe(
+    //         `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_LEADS_COLLECTION_ID}.documents`,
+    //         (response) => {
+    //             const event = response.events[0];
+    //             const payload = response.payload as Lead;
 
-                // Only care about leads assigned to me
-                if (payload.assignedEmployeeId !== userId) return;
+    //             // Only care about leads assigned to me
+    //             if (payload.assignedEmployeeId !== userId) return;
 
-                if (event.includes('.update')) {
-                    setLeads((prev) => {
-                        const exists = prev.find((l) => l.$id === payload.$id);
-                        if (exists) return prev.map((l) => (l.$id === payload.$id ? payload : l));
-                        return [payload, ...prev];
-                    });
-                } else if (event.includes('.create')) {
-                    setLeads((prev) => [payload, ...prev]);
-                } else if (event.includes('.delete')) {
-                    setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
-                }
-            }
-        );
+    //             if (event.includes('.update')) {
+    //                 setLeads((prev) => {
+    //                     const exists = prev.find((l) => l.$id === payload.$id);
+    //                     if (exists) return prev.map((l) => (l.$id === payload.$id ? payload : l));
+    //                     return [payload, ...prev];
+    //                 });
+    //             } else if (event.includes('.create')) {
+    //                 setLeads((prev) => [payload, ...prev]);
+    //             } else if (event.includes('.delete')) {
+    //                 setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
+    //             }
+    //         }
+    //     );
 
-        return () => {
-            unsubscribe();
-        };
-    }, [userId]);
+    //     return () => {
+    //         unsubscribe();
+    //     };
+    // }, [userId]);
 
     const fetchLeads = async (uid: string) => {
         try {
-            const res = await databases.listDocuments(
-                APPWRITE_DATABASE_ID,
-                APPWRITE_LEADS_COLLECTION_ID,
-                [
-                    Query.equal('assignedEmployeeId', uid),
-                    Query.limit(100), // Adjust limit as needed
-                ]
-            );
-            setLeads(res.documents as unknown as Lead[]);
+            // Use our secure API instead of direct Appwrite client
+            const params = new URLSearchParams();
+            params.append('limit', '100');
+            params.append('assignedTo', uid);
+
+            const res = await fetch(`/api/leads?${params.toString()}`);
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error || 'Failed to fetch leads');
+
+            setLeads(data.documents as Lead[]);
         } catch (error) {
             console.error('Error fetching leads:', error);
         } finally {

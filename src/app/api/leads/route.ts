@@ -10,14 +10,57 @@ export async function GET(req: NextRequest) {
         const search = searchParams.get('search');
         const status = searchParams.get('status');
         const assignedTo = searchParams.get('assignedTo');
-        const limit = parseInt(searchParams.get('limit') || '20');
+        // SECURITY: Cap limit to prevent resource exhaustion
+        const rawLimit = parseInt(searchParams.get('limit') || '20');
+        const limit = Math.min(rawLimit, 100);
 
-        const { databases } = await createSessionClient();
+        const { databases, user } = await createSessionClient();
+
+        console.log('[LEADS_API_DEBUG] User:', user ? user.$id : 'null');
+
+        if (!user) {
+            console.error('[LEADS_API_DEBUG] Unauthorized: No user returned');
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Check if user is admin
+        const isAdmin = (user.labels && user.labels.includes('admin')) ||
+            (req.cookies.get('dev_session')?.value === 'admin');
 
         const queries = [
             Query.orderDesc('$createdAt'),
             Query.limit(limit),
         ];
+
+        // SECURITY: Enforce data isolation
+        // If user is NOT admin, they can ONLY see:
+        // 1. Unassigned leads
+        // 2. Leads assigned to themselves
+        if (!isAdmin) {
+            // If they are trying to see unassigned leads, allow it
+            if (status === 'Unassigned' && assignedTo === 'null') {
+                // Allow - standard "Claim Leads" view
+            }
+            // If they are trying to see their own leads, allow it
+            else if (assignedTo === user.$id) {
+                // Allow - standard "My Kanban" view
+            }
+            // OTHERWISE: Force filter to their own ID to prevent snooping
+            else {
+                // If they didn't specify filters, or specified other filters,
+                // we must restrict them to their own leads OR unassigned
+                // But Appwrite queries are AND-based.
+
+                // Simplest security model:
+                // If they asked for 'Unassigned', ensure assignedTo is null
+                if (status === 'Unassigned') {
+                    queries.push(Query.isNull('assignedEmployeeId'));
+                } else {
+                    // For any other status, FORCE them to only see their own leads
+                    queries.push(Query.equal('assignedEmployeeId', user.$id));
+                }
+            }
+        }
 
         if (cursor) {
             queries.push(Query.cursorAfter(cursor));
@@ -35,7 +78,13 @@ export async function GET(req: NextRequest) {
             if (assignedTo === 'null') {
                 queries.push(Query.isNull('assignedEmployeeId'));
             } else {
-                queries.push(Query.equal('assignedEmployeeId', assignedTo));
+                // If not admin, we've already enforced ownership above or allowed unassigned
+                // If admin, respect the requested filter
+                if (isAdmin) {
+                    queries.push(Query.equal('assignedEmployeeId', assignedTo));
+                } else if (assignedTo === user.$id) {
+                    queries.push(Query.equal('assignedEmployeeId', assignedTo));
+                }
             }
         }
 
@@ -52,6 +101,6 @@ export async function GET(req: NextRequest) {
         if (error.message?.includes('Unauthorized')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSessionClient } from '@/lib/appwrite/server';
+import { createSessionClient } from '@/lib/session';
 import { APPWRITE_DATABASE_ID, APPWRITE_LEADS_COLLECTION_ID } from '@/lib/appwrite/config';
 import { Query } from 'node-appwrite';
 
 export async function GET(request: NextRequest) {
     try {
         // 1. Verify Authentication & Admin Role
-        const { account, databases } = await createSessionClient();
-        const user = await account.get();
+        const { requireAdmin } = await import('@/lib/session');
+        await requireAdmin();
+
+        const { databases } = await createSessionClient();
 
         // Verify admin membership
         // Note: In a real app, we should use the teams API or a custom claim

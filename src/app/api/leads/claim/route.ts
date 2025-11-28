@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Get user from session (server-side validation)
-        const user = await getUserFromRequest(req);
+        const user = await getUserFromRequest();
         const userId = user.$id;
 
         const { databases } = await createAdminClient();
@@ -26,9 +26,14 @@ export async function POST(req: NextRequest) {
             leadId
         );
 
-        // 2. Check if already assigned
+        // 2. Check if already assigned or not in Unassigned status
         if (lead.assignedEmployeeId) {
             return NextResponse.json({ error: 'Lead already claimed' }, { status: 409 });
+        }
+
+        // Optional: strict check for 'Unassigned' status to prevent claiming closed/lost leads if they were somehow unassigned but kept status
+        if (lead.pipelineStatus !== 'Unassigned') {
+            return NextResponse.json({ error: 'Lead is not available for claiming' }, { status: 400 });
         }
 
         const currentSequence = lead.$sequence;

@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum PipelineStatus {
+  Unassigned
+  Email_Sent     @map("Email Sent")
+  Client_Replied @map("Client Replied")
+  Plan_Sent      @map("Plan Sent")
+  Rate_Finalized @map("Rate Finalized")
+  Docs_Signed    @map("Docs Signed")
+  Testing
+  Approved
+  Rejected
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Will store hashed password
+  name      String
+  role      Role     @default(EMPLOYEE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  leads     Lead[]
+}
+
+model Lead {
+  id                 String         @id @default(uuid())
+  frn                String
+  companyName        String         @map("company_name")
+  contactEmail       String?        @map("contact_email")
+  contactPhone       String?        @map("contact_phone")
+  serviceType        String?        @map("service_type")
+  website            String?
+  pipelineStatus     PipelineStatus @default(Unassigned)
+  
+  // History stored as JSON array since it's a simple log
+  // Alternatively, we could create a separate model if we need to query history items
+  history            Json?          @default("[]")
+
+  assignedEmployeeId String?
+  assignedEmployee   User?          @relation(fields: [assignedEmployeeId], references: [id])
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([assignedEmployeeId])
+  @@index([pipelineStatus])
+}

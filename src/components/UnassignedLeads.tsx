@@ -40,41 +40,43 @@ export default function UnassignedLeads() {
         fetchLeads(null, debouncedSearch, true);
     }, [debouncedSearch]);
 
-    useEffect(() => {
-        // Realtime Subscription
-        const unsubscribe = client.subscribe(
-            `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_LEADS_COLLECTION_ID}.documents`,
-            (response) => {
-                const event = response.events[0];
-                const payload = response.payload as any;
+    // Realtime subscriptions disabled - incompatible with dev_session
+    // TODO: Re-enable when all users have proper Appwrite sessions
+    // useEffect(() => {
+    //     // Realtime Subscription
+    //     const unsubscribe = client.subscribe(
+    //         `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_LEADS_COLLECTION_ID}.documents`,
+    //         (response) => {
+    //             const event = response.events[0];
+    //             const payload = response.payload as any;
 
-                // Only update if we are not searching (realtime search is complex)
-                if (debouncedSearch) return;
+    //             // Only update if we are not searching (realtime search is complex)
+    //             if (debouncedSearch) return;
 
-                if (event.includes('.create')) {
-                    if (!payload.assignedEmployeeId) {
-                        setLeads((prev) => [payload, ...prev]);
-                    }
-                } else if (event.includes('.update')) {
-                    if (payload.assignedEmployeeId) {
-                        setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
-                    } else {
-                        setLeads((prev) => {
-                            const exists = prev.find((l) => l.$id === payload.$id);
-                            if (exists) return prev.map((l) => (l.$id === payload.$id ? payload : l));
-                            return [payload, ...prev];
-                        });
-                    }
-                } else if (event.includes('.delete')) {
-                    setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
-                }
-            }
-        );
+    //             if (event.includes('.create')) {
+    //                 if (!payload.assignedEmployeeId) {
+    //                     setLeads((prev) => [payload, ...prev]);
+    //                 }
+    //             } else if (event.includes('.update')) {
+    //                 if (payload.assignedEmployeeId) {
+    //                     setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
+    //                 } else {
+    //                     setLeads((prev) => {
+    //                         const exists = prev.find((l) => l.$id === payload.$id);
+    //                         if (exists) return prev.map((l) => (l.$id === payload.$id ? payload : l));
+    //                         return [payload, ...prev];
+    //                     });
+    //                 }
+    //             } else if (event.includes('.delete')) {
+    //                 setLeads((prev) => prev.filter((l) => l.$id !== payload.$id));
+    //             }
+    //         }
+    //     );
 
-        return () => {
-            unsubscribe();
-        };
-    }, [debouncedSearch]);
+    //     return () => {
+    //         unsubscribe();
+    //     };
+    // }, [debouncedSearch]);
 
     const fetchLeads = async (cursor: string | null = null, search: string = '', isNewSearch: boolean = false) => {
         setLoading(true);

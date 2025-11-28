@@ -1,11 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/session';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
-        const user = await getUserFromRequest(request);
-        return NextResponse.json(user);
+        const user = await getUserFromRequest();
+
+        // Return only necessary user info
+        return NextResponse.json({
+            $id: user.$id,
+            email: user.email,
+            name: user.name,
+            labels: user.labels || [],
+        });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 401 });
+        console.error('/api/auth/me error:', error);
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 }

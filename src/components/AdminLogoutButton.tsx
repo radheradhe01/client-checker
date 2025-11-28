@@ -7,21 +7,20 @@ export default function AdminLogoutButton() {
 
     const handleLogout = async () => {
         try {
-            // Import client-side only
-            const { account } = await import('@/lib/appwrite/client');
-            await account.deleteSession('current');
-            // Force hard reload to clear any state
-            window.location.href = '/login?role=admin';
+            // Use logout API to handle both dev_session and real sessions
+            await fetch('/api/auth/logout', { method: 'POST' });
+            router.push('/login');
         } catch (error) {
             console.error('Logout failed', error);
-            window.location.href = '/login?role=admin';
+            // Force redirect even if logout fails
+            router.push('/login');
         }
     };
 
     return (
         <button
             onClick={handleLogout}
-            className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
         >
             Logout
         </button>

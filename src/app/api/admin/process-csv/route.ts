@@ -37,11 +37,21 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
         }
 
+        // Enforce Admin Access
+        const { requireAdmin } = await import('@/lib/session');
+        await requireAdmin();
+
         const { storage, databases } = await createAdminClient();
 
         // 1. Fetch the uploaded file
         const fileData = await storage.getFileDownload(APPWRITE_BUCKET_ID, fileId);
         const buffer = Buffer.from(fileData);
+
+        // SECURITY: Prevent DoS by limiting file size (e.g., 5MB)
+        if (buffer.length > 5 * 1024 * 1024) {
+            return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 413 });
+        }
+
         const fileContent = buffer.toString('utf-8');
 
         // 2. Parse CSV
@@ -116,11 +126,7 @@ export async function POST(req: NextRequest) {
                 return;
             }
 
-            // Validate phone if provided
-            if (record.contact_phone && record.contact_phone.trim() && !PHONE_REGEX.test(record.contact_phone.trim())) {
-                validationErrors.push({ row: rowNumber, field: 'contact_phone', value: record.contact_phone, error: 'Invalid phone format (min 10 digits)' });
-                return;
-            }
+            // Phone validation removed - accept any phone format
 
             // Check for duplicates
             if (existingFRNs.has(record.frn.trim())) {
@@ -135,8 +141,9 @@ export async function POST(req: NextRequest) {
         const created: string[] = [];
         const failed: Array<{ frn: string; error: string }> = [];
 
-        // Process in batches of 50 for faster uploads
-        const BATCH_SIZE = 100;
+        // Process in batches of 50 with delay to avoid rate limits
+        const BATCH_SIZE = 50;
+        const BATCH_DELAY_MS = 500; // Wait 500ms between batches
 
         for (let i = 0; i < validRecords.length; i += BATCH_SIZE) {
             const batch = validRecords.slice(i, i + BATCH_SIZE);
@@ -165,9 +172,15 @@ export async function POST(req: NextRequest) {
                     );
                     created.push(record.frn.trim());
                 } catch (error: any) {
-                    failed.push({ frn: record.frn, error: error.message });
+                    console.error(`Failed to create lead ${record.frn}:`, error);
+                    failed.push({ frn: record.frn, error: error.message || error.toString() });
                 }
             }));
+
+            // Add delay between batches to avoid overwhelming the server
+            if (i + BATCH_SIZE < validRecords.length) {
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+            }
         }
 
         // 5. Return summary
@@ -184,7 +197,7 @@ export async function POST(req: NextRequest) {
                 created,
                 skipped_duplicates: skippedDuplicates,
                 validation_errors: validationErrors.slice(0, 10), // Limit to first 10 errors
-                failed: failed.slice(0, 10)
+                failed: failed.slice(0, 50) // Show first 50 failures
             }
         });
 

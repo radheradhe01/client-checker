@@ -15,8 +15,27 @@ export default function LoginPage() {
         setError('');
 
         try {
-            // Use Dev Login API to bypass Appwrite rate limits
-            const res = await fetch('/api/auth/dev-login', {
+            // Check if this is the dev admin account
+            if (email === 'admin@crm.local' && password === 'admin123456') {
+                // Use Dev Login API for admin
+                const res = await fetch('/api/auth/dev-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Login failed');
+                }
+
+                window.location.href = '/dashboard';
+                return;
+            }
+
+            // For employees: Use Server-Side Login API
+            const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -28,12 +47,12 @@ export default function LoginPage() {
                 throw new Error(data.error || 'Login failed');
             }
 
-            // Success! Redirect to dashboard
-            router.push('/dashboard');
+            // Success! Force hard redirect to ensure cookies are sent
+            window.location.href = '/dashboard';
 
         } catch (err: any) {
             console.error('Login error:', err);
-            setError(err.message || 'Login failed');
+            setError(err.message || 'Invalid credentials');
         }
     };
 

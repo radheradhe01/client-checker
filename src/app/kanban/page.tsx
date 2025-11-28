@@ -24,8 +24,7 @@ export default function KanbanPage() {
                         <div className="flex items-center">
                             <button
                                 onClick={async () => {
-                                    const { account } = await import('@/lib/appwrite/client');
-                                    await account.deleteSession('current');
+                                    await fetch('/api/auth/logout', { method: 'POST' });
                                     window.location.href = '/login';
                                 }}
                                 className="text-gray-500 hover:text-gray-700 text-sm font-medium"

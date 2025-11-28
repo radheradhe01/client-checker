@@ -10,13 +10,32 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const { databases } = await createSessionClient();
+        const { databases, user } = await createSessionClient();
+
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
         const lead = await databases.getDocument(
             APPWRITE_DATABASE_ID,
             APPWRITE_LEADS_COLLECTION_ID,
             id
         );
+
+        // RBAC: Check access
+        const isAdmin = (user.labels && user.labels.includes('admin')) ||
+            (req.cookies.get('dev_session')?.value === 'admin');
+
+        // Allow access if:
+        // 1. User is Admin
+        // 2. Lead is Unassigned (so they can view details to claim it)
+        // 3. Lead is assigned to the user
+        const isAssignedToUser = lead.assignedEmployeeId === user.$id;
+        const isUnassigned = !lead.assignedEmployeeId;
+
+        if (!isAdmin && !isAssignedToUser && !isUnassigned) {
+            return NextResponse.json({ error: 'Forbidden: You do not have access to this lead' }, { status: 403 });
+        }
 
         return NextResponse.json(lead);
 
@@ -41,9 +60,22 @@ export async function PATCH(
             return NextResponse.json({ error: 'Pipeline Status is required' }, { status: 400 });
         }
 
+        // SECURITY: Validate status against whitelist
+        const VALID_STATUSES = [
+            'Unassigned', 'Email Sent', 'Client Replied', 'Plan Sent',
+            'Rate Finalized', 'Docs Signed', 'Testing', 'Approved', 'Rejected'
+        ];
+        if (!VALID_STATUSES.includes(pipelineStatus)) {
+            return NextResponse.json({ error: 'Invalid pipeline status' }, { status: 400 });
+        }
+
         // Get user from session
-        const user = await getUserFromRequest(req);
+        const { user } = await createSessionClient();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const userId = user.$id;
+        const isAdmin = (user.labels && user.labels.includes('admin')) ||
+            (req.cookies.get('dev_session')?.value === 'admin');
 
         const { databases } = await createAdminClient();
 
@@ -54,8 +86,8 @@ export async function PATCH(
             id
         );
 
-        // Verify ownership: Only the assigned employee can update their lead
-        if (lead.assignedEmployeeId !== userId) {
+        // Verify ownership: Only the assigned employee OR Admin can update
+        if (lead.assignedEmployeeId !== userId && !isAdmin) {
             return NextResponse.json({ error: 'Forbidden: You can only update your own leads' }, { status: 403 });
         }
 

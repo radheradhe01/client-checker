@@ -5,6 +5,10 @@ import { Query } from 'node-appwrite';
 
 export async function GET(req: NextRequest) {
     try {
+        // Enforce Admin Access
+        const { requireAdmin } = await import('@/lib/session');
+        await requireAdmin();
+
         const { databases, teams } = await createAdminClient();
 
         // 1. Fetch all leads (limit 5000 for now, or use pagination for total aggregation)

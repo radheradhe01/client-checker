@@ -34,6 +34,8 @@ export async function createSessionClient() {
             prefs: {}
         };
 
+        console.log('[SESSION_DEBUG] Dev Mode Active. Mock User:', mockUser);
+
         return {
             get account() {
                 return {
@@ -45,17 +47,29 @@ export async function createSessionClient() {
             },
             get databases() {
                 return databases;
-            }
+            },
+            user: mockUser // EXPOSE MOCK USER HERE
         };
     }
 
     // Get session cookie
-    const sessionCookie = cookieStore.get('a_session_console') ||
+    const sessionCookie = cookieStore.get('session') ||
+        cookieStore.get('a_session_console') ||
         cookieStore.get(`a_session_${APPWRITE_PROJECT_ID}`);
 
+    console.log('[SESSION_DEBUG] Cookies available:', {
+        hasSession: !!cookieStore.get('session'),
+        hasConsole: !!cookieStore.get('a_session_console'),
+        hasProject: !!cookieStore.get(`a_session_${APPWRITE_PROJECT_ID}`),
+        allCookies: cookieStore.getAll().map(c => c.name)
+    });
+
     if (!sessionCookie) {
+        console.error('[SESSION_DEBUG] No session cookie found');
         throw new Error('No session found');
     }
+
+
 
     const client = new Client()
         .setEndpoint(APPWRITE_ENDPOINT)
@@ -64,22 +78,34 @@ export async function createSessionClient() {
     // Set the session
     client.setSession(sessionCookie.value);
 
+    const account = new Account(client);
+    const databases = new Databases(client);
+
+    // Get user to retrieve labels
+    let userWithLabels;
+    try {
+        userWithLabels = await account.get();
+    } catch (error) {
+        throw new Error('Invalid session');
+    }
+
     return {
         get account() {
-            return new Account(client);
+            return account;
         },
         get databases() {
-            return new Databases(client); // Add databases here too for consistency
-        }
+            return databases;
+        },
+        user: userWithLabels // Expose user with labels
     };
 }
 
 /**
- * Extract and validate user session from request
+ * Extract and validate user session
  * @returns User object with $id, email, name, etc.
  * @throws Error if not authenticated
  */
-export async function getUserFromRequest(request?: NextRequest) {
+export async function getUserFromRequest() {
     try {
         const { account } = await createSessionClient();
         const user = await account.get();
@@ -89,11 +115,34 @@ export async function getUserFromRequest(request?: NextRequest) {
     }
 }
 
+export async function requireAdmin() {
+    const { user } = await createSessionClient();
+
+    if (!user) {
+        throw new Error('Unauthorized');
+    }
+
+    const isAdmin = user.labels && user.labels.includes('admin');
+
+    // Check for dev admin
+    const cookieStore = await cookies();
+    const devSession = cookieStore.get('dev_session');
+    if (devSession && devSession.value === 'admin') {
+        return true;
+    }
+
+    if (!isAdmin) {
+        throw new Error('Forbidden: Admin access required');
+    }
+
+    return user;
+}
+
 /**
  * Require authentication, throw if not logged in
  */
 export async function requireAuth(request?: NextRequest) {
-    const user = await getUserFromRequest(request);
+    const user = await getUserFromRequest();
     if (!user) {
         throw new Error('Authentication required');
     }
